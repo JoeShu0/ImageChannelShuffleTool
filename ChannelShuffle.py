@@ -9,7 +9,7 @@ class ImageProcessorApp:
     def __init__(self, root):
         self.root = root
         self.root.title("图像处理工具")
-        self.root.geometry("500x450")
+        self.root.geometry("500x500")  # 增加了高度以适应新控件
         self.root.resizable(False, False)
         
         # 默认设置
@@ -28,6 +28,11 @@ class ImageProcessorApp:
             'B': tk.BooleanVar(value=False),
             'A': tk.BooleanVar(value=False)
         }
+        
+        # 添加覆盖源文件选项和输出格式
+        self.overwrite_source = tk.BooleanVar(value=False)
+        self.output_format = tk.StringVar(value='TGA')
+        self.output_formats = ['PNG', 'TGA', 'JPG']
 
         # 创建UI
         self.create_widgets()
@@ -74,6 +79,33 @@ class ImageProcessorApp:
                 variable=self.invert_options[channel]
             ).pack(side='left', padx=(5, 0))
         
+        # 输出选项框架
+        output_frame = ttk.LabelFrame(self.root, text="输出选项")
+        output_frame.pack(fill='x', padx=10, pady=5)
+        
+        # 覆盖源文件选项
+        overwrite_check = ttk.Checkbutton(
+            output_frame,
+            text="覆盖源文件",
+            variable=self.overwrite_source,
+            command=self.toggle_output_format_state
+        )
+        overwrite_check.pack(side='left', padx=10, pady=5)
+        
+        # 输出格式下拉菜单
+        format_row = ttk.Frame(output_frame)
+        format_row.pack(side='left', padx=5, pady=5)
+        
+        ttk.Label(format_row, text="输出格式:").pack(side='left', padx=(0, 5))
+        self.format_combobox = ttk.Combobox(
+            format_row,
+            textvariable=self.output_format,
+            values=self.output_formats,
+            state="readonly",
+            width=5
+        )
+        self.format_combobox.pack(side='left')
+        
         # 文件选择区域
         file_frame = ttk.LabelFrame(self.root, text="文件处理")
         file_frame.pack(fill='both', expand=True, padx=10, pady=5)
@@ -107,6 +139,13 @@ class ImageProcessorApp:
             text="开始处理", 
             command=self.process_images
         ).pack(side='right', padx=5)
+    
+    def toggle_output_format_state(self):
+        """根据覆盖源文件选项切换输出格式下拉菜单的状态"""
+        if self.overwrite_source.get():
+            self.format_combobox.config(state='disabled')
+        else:
+            self.format_combobox.config(state='readonly')
     
     def add_files(self):
         files = filedialog.askopenfilenames(
@@ -158,7 +197,6 @@ class ImageProcessorApp:
                 channels = {'R': r, 'G': g, 'B': b, 'A': a}
                 
                 # 应用通道映射
-                #new_channels = [channels[self.channel_map[c].get()] for c in ['R', 'G', 'B', 'A']]
                 new_channels = []
                 for c in ['R', 'G', 'B', 'A']:
                     channel_source = self.channel_map[c].get()
@@ -169,13 +207,30 @@ class ImageProcessorApp:
                     new_channels.append(channel_img)
 
                 new_img = Image.merge('RGBA', new_channels)
+                new_img_noalpha = Image.merge('RGB', new_channels[:3]) 
                 
-                # 保存结果
+                # 确定输出路径和格式
                 file_dir, file_name = os.path.split(file_path)
                 name, ext = os.path.splitext(file_name)
-                new_path = os.path.join(file_dir, f"{name}.tga")
-                new_img.save(new_path, format='TGA')
-            return new_path, None
+                
+                if self.overwrite_source.get():
+                    # 覆盖源文件，使用源文件格式
+                    output_format = ext[1:].upper()  # 去掉点并转为大写
+                    if output_format == 'JPG':
+                        output_format = 'JPEG'
+                    new_path = file_path
+                else:
+                    # 不覆盖源文件，使用选择的格式
+                    output_format = self.output_format.get()
+                    new_path = os.path.join(file_dir, f"{name}.{output_format.lower()}")
+                
+                # 保存结果
+                if output_format == 'JPEG':
+                    new_img_noalpha.save(new_path, format=output_format, quality=95)
+                else:
+                    new_img.save(new_path, format=output_format)
+                
+                return new_path, None
         except Exception as e:
             return None, str(e)
     
